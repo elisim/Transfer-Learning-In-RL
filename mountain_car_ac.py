@@ -1,16 +1,18 @@
+# https://medium.com/@asteinbach/actor-critic-using-deep-rl-continuous-mountain-car-in-tensorflow-4c1fb2110f7c
 import gym
 import numpy as np
 import tensorflow as tf
 import collections
 import datetime
-import sys
 
-from keras.models import Sequential
-from keras.layers import Dense
+from keras.models import Sequential, Model
+from keras.layers import Dense, Input, Activation
 from keras.optimizers import Adam
 
-env = gym.make('MountainCarContinuous-v0')
 np.random.seed(1)
+env = gym.make('MountainCarContinuous-v0')
+state_size = env.observation_space.shape[0]
+action_size = env.action_space.shape[0]
 
 
 class TensorFlowLogger:
@@ -70,56 +72,58 @@ class ActorCritic:
 
 
 class CriticNetwork:
-    def __init__(self, state_size, lerning_rate):
-        self.state_size = state_size
-        self.learning_rate = lerning_rate
-
+    def __init__(self, learning_rate):
         self.critic = Sequential()
-        self.critic.add(Dense(units=32, input_dim=self.state_size, activation='elu'))
+        self.critic.add(Dense(units=32, input_dim=state_size, activation='elu'))
         self.critic.add(Dense(units=32, activation='elu'))
         self.critic.add(Dense(units=1))
-        self.critic.compile(loss='mse', optimizer=Adam(lr=self.learning_rate))
+        self.critic.compile(loss='mse', optimizer=Adam(lr=learning_rate))
 
     def __call__(self):
         return self.critic
 
 
-
 class PolicyNetwork:
     """
-    The network input is the state and output are two scalar functions, μ(s) and σ(s), which are used as the mean and standard deviation of a Gaussian (normal) distribution. We will choose our actions by sampling from this distribution. 
+    The network input is the state and output are two scalar functions, μ(s) and σ(s),
+    which are used as the mean and standard deviation of a Gaussian (normal) distribution.
+    We will choose our actions by sampling from this distribution.
     """
-    def __init__(self, state_size, action_size, learning_rate, name='policy_network'):
-        self.state_size = state_size
+    def __init__(self, learning_rate, name='policy_network'):
         self.learning_rate = learning_rate
 
-        with tf.variable_scope(name):  # define network variables
+        inp = Input(state_size)
+        x = Dense(units=32, activation='elu')(inp)
+        x = Dense(units=32, activation='elu')(x)
+        sigma = Dense(units=1, activation='softplus')(x) + 1e-5  # σ
+        mu = Dense(units=1)(x)  # μ
+        model = Model(int, [sigma, mu])
+        tf.random.Normal
 
-            # Inserts a placeholder for a tensor that will be always fed.
-            # Its value must be fed using the feed_dict optional argument to Session.run()
-            self.state = tf.placeholder(tf.float32, [None, self.state_size], name="state")
-            self.action = tf.placeholder(tf.int32, [self.action_size], name="action")
-            self.R_t = tf.placeholder(tf.float32, name="total_rewards")
 
-            # two Dense layers
-            self.W1 = tf.get_variable("W1", [self.state_size, 32],
-                                      initializer=tf.contrib.layers.xavier_initializer(seed=0))
-            self.b1 = tf.get_variable("b1", [32], initializer=tf.zeros_initializer())
-            self.W2 = tf.get_variable("W2", [32, 1],
-                                      initializer=tf.contrib.layers.xavier_initializer(seed=0))
-            self.b2 = tf.get_variable("b2", [1], initializer=tf.zeros_initializer())
+def policy_network(state):
+    n_hidden1 = 40
+    n_hidden2 = 40
+    n_outputs = 1
 
-            self.Z1 = tf.add(tf.matmul(self.state, self.W1), self.b1)  # Z1 = State * W1 +  b1
-            self.A1 = tf.nn.elu(self.Z1)  # A1 = relu(Z1)
-            self.output = tf.add(tf.matmul(self.A1, self.W2), self.b2)  # output = A1 * W2 + b2 (number)
+    with tf.variable_scope("policy_network"):
+        init_xavier = tf.contrib.layers.xavier_initializer()
 
-            # Softmax probability distribution over actions
-            self.actions_distribution = tf.squeeze(tf.nn.softmax(self.output))  # actions probs = softmax(output)
-            # Loss with negative log probability
-            self.neg_log_prob = tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.output,
-                                                                           labels=self.action)  # cross-entropy with actions probs.
-            self.loss = tf.reduce_mean(self.neg_log_prob * self.R_t)
-            self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.loss)
+        hidden1 = tf.layers.dense(state, n_hidden1, tf.nn.elu, init_xavier)
+        hidden2 = tf.layers.dense(hidden1, n_hidden2, tf.nn.elu, init_xavier)
+        mu = tf.layers.dense(hidden2, n_outputs, None, init_xavier)
+        sigma = tf.layers.dense(hidden2, n_outputs, None, init_xavier)
+        sigma = tf.nn.softplus(sigma) + 1e-5
+        norm_dist = tf.contrib.distributions.Normal(mu, sigma)
+        action_tf_var = tf.squeeze(norm_dist.sample(1), axis=0)
+        action_tf_var = tf.clip_by_value(
+            action_tf_var, env.action_space.low[0],
+            env.action_space.high[0])
+    return action_tf_var, norm_dist
+
+loss_actor = -tf.log(norm_dist.prob(action_placeholder) + 1e-5) * delta_placeholder
+        training_op_actor = tf.train.AdamOptimizer(
+            lr_actor, name='actor_optimizer').minimize(loss_actor)
 
 
 def main():
