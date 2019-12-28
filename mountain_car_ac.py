@@ -28,24 +28,20 @@ class TensorFlowLogger:
 
 
 class ActorCritic:
-    def __init__(self, 
-                 state_size, 
-                 action_size, 
+    def __init__(self,
                  actor_learning_rate, 
                  critic_learning_rate, 
                  discount_factor, 
                  sess, 
                  tf_logger):
-        self.state_size = state_size
         self.actor_learning_rate = actor_learning_rate
         self.critic_learning_rate = critic_learning_rate
-        self.action_size = action_size
         self.discount_factor = discount_factor
         self.sess = sess
         self.tf_logger = tf_logger
 
-        self.actor = PolicyNetwork(self.state_size, self.action_size, self.actor_learning_rate)
-        self.critic = CriticNetwork(self.state_size, self.critic_learning_rate)()
+        self.actor = PolicyNetwork(self.actor_learning_rate)
+        self.critic = CriticNetwork(self.critic_learning_rate)()
 
     def train(self, state, action, action_one_hot, reward, next_state, done, total_steps):
         target = np.zeros((1, 1))
@@ -97,106 +93,83 @@ class PolicyNetwork:
         x = Dense(units=32, activation='elu')(x)
         sigma = Dense(units=1, activation='softplus')(x) + 1e-5  # σ
         mu = Dense(units=1)(x)  # μ
-        model = Model(int, [sigma, mu])
-        tf.random.Normal
+        self.model = Model(int, [sigma, mu])
 
-
-def policy_network(state):
-    n_hidden1 = 40
-    n_hidden2 = 40
-    n_outputs = 1
-
-    with tf.variable_scope("policy_network"):
-        init_xavier = tf.contrib.layers.xavier_initializer()
-
-        hidden1 = tf.layers.dense(state, n_hidden1, tf.nn.elu, init_xavier)
-        hidden2 = tf.layers.dense(hidden1, n_hidden2, tf.nn.elu, init_xavier)
-        mu = tf.layers.dense(hidden2, n_outputs, None, init_xavier)
-        sigma = tf.layers.dense(hidden2, n_outputs, None, init_xavier)
-        sigma = tf.nn.softplus(sigma) + 1e-5
+    def get_action(self, state):
+        sigma, mu = self.model.predict(state, verbose=0)
         norm_dist = tf.contrib.distributions.Normal(mu, sigma)
-        action_tf_var = tf.squeeze(norm_dist.sample(1), axis=0)
-        action_tf_var = tf.clip_by_value(
-            action_tf_var, env.action_space.low[0],
-            env.action_space.high[0])
-    return action_tf_var, norm_dist
-
-loss_actor = -tf.log(norm_dist.prob(action_placeholder) + 1e-5) * delta_placeholder
-        training_op_actor = tf.train.AdamOptimizer(
-            lr_actor, name='actor_optimizer').minimize(loss_actor)
+        action = tf.squeeze(norm_dist.sample(1), axis=0)
+        # Clips tensor values to a env min and max values
+        action = tf.clip_by_value(action, env.action_space.low[0], env.action_space.high[0])
+        return action
 
 
 def main():
-#     run_with_baseline_flag = "-b" in sys.argv
-    state_size = env.observation_space.shape[0]
-    action_size = env.action_space.shape[0]
-
     # Define hyperparameters
     max_episodes = 5000
     max_steps = 501
     discount_factor = 0.99
-    policy_learning_rate = 0.0004
+    actor_learning_rate = 0.0004
     critic_learning_rate = 0.0004
     render = False
 
     # Create Logger to log scalars
-    tf_logger = TensorFlowLogger(with_baseline=run_with_baseline_flag)
+    tf_logger = TensorFlowLogger()
 
-    # Initialize the policy network
-    tf.reset_default_graph()
+    # actor critic
+    actor = PolicyNetwork(actor_learning_rate)
+    critic = CriticNetwork(critic_learning_rate)
 
-    # Start training the agent with REINFORCE algorithm
-    with tf.Session() as sess:
-        model = ActorCritic(state_size, action_size, policy_learning_rate, critic_learning_rate, discount_factor, sess, tf_logger)
-        sess.run(tf.global_variables_initializer())
-        solved = False
-        Transition = collections.namedtuple("Transition", ["state", "action", "reward", "next_state", "done"])
-        episode_rewards = np.zeros(max_episodes)
-        average_rewards = 0.0
-        total_steps = 0
 
-        for episode in range(max_episodes):
-            steps_per_episode = 0
-            state = env.reset()
-            state = state.reshape([1, state_size])
-            episode_transitions = []
+    # model = ActorCritic(policy_learning_rate, critic_learning_rate, discount_factor, tf_logger)
+    solved = False
+    Transition = collections.namedtuple("Transition", ["state", "action", "reward", "next_state", "done"])
+    episode_rewards = np.zeros(max_episodes)
+    average_rewards = 0.0
+    total_steps = 0
 
-            # Generate an episode, out is list of episode_transitions: state, action, reward, next_state and done.
-            for step in range(max_steps):
-                actions_distribution = sess.run(model.actor.actions_distribution, feed_dict={model.actor.state: state})
-                action = np.random.choice(np.arange(len(actions_distribution)), p=actions_distribution)
-                next_state, reward, done, _ = env.step(action)
-                next_state = next_state.reshape([1, state_size])
+    for episode in range(max_episodes):
+        steps_per_episode = 0
+        state = env.reset()
+        episode_transitions = []
 
-                if render:
-                    env.render()
+        # Generate an episode, out is list of episode_transitions: state, action, reward, next_state and done.
+        for step in range(max_steps):
+            action = actor.get_action(state)
+            actions_distribution = sess.run(model.actor.actions_distribution, feed_dict={model.actor.state: state})
+            action = np.random.choice(np.arange(len(actions_distribution)), p=actions_distribution)
+            next_state, reward, done, _ = env.step(action)
+            next_state = next_state.reshape([1, state_size])
 
-                action_one_hot = np.zeros(action_size)
-                action_one_hot[action] = 1
-                episode_transitions.append(
-                    Transition(state=state, action=action_one_hot, reward=reward, next_state=next_state, done=done))
-                episode_rewards[episode] += reward
+            if render:
+                env.render()
 
-                model.train(state, action, action_one_hot, reward, next_state, done, total_steps)
+            action_one_hot = np.zeros(action_size)
+            action_one_hot[action] = 1
+            episode_transitions.append(
+                Transition(state=state, action=action_one_hot, reward=reward, next_state=next_state, done=done))
+            episode_rewards[episode] += reward
 
-                if done:
-                    if episode > 98:
-                        # Check if solved
-                        average_rewards = np.mean(episode_rewards[(episode - 99):episode + 1])
-                    print(
-                        "Episode {} Reward: {} Average over 100 episodes: {}".format(episode, episode_rewards[episode],
-                                                                                     round(average_rewards, 2)))
-                    if average_rewards > 475:
-                        print(' Solved at episode: ' + str(episode))
-                        print(' Total Steps: ' + str(total_steps))
-                        solved = True
-                    break
-                state = next_state
-                steps_per_episode += 1
+            model.train(state, action, action_one_hot, reward, next_state, done, total_steps)
 
-            tf_logger.log_scalar(tag='average_100_episodes_reward', value=average_rewards, step=episode)
-            tf_logger.log_scalar(tag='episode_reward', value=episode_rewards[episode], step=episode)
-            tf_logger.log_scalar(tag='steps_per_episode', value=steps_per_episode, step=episode)
-
-            if solved:
+            if done:
+                if episode > 98:
+                    # Check if solved
+                    average_rewards = np.mean(episode_rewards[(episode - 99):episode + 1])
+                print(
+                    "Episode {} Reward: {} Average over 100 episodes: {}".format(episode, episode_rewards[episode],
+                                                                                 round(average_rewards, 2)))
+                if average_rewards > 475:
+                    print(' Solved at episode: ' + str(episode))
+                    print(' Total Steps: ' + str(total_steps))
+                    solved = True
                 break
+            state = next_state
+            steps_per_episode += 1
+
+        tf_logger.log_scalar(tag='average_100_episodes_reward', value=average_rewards, step=episode)
+        tf_logger.log_scalar(tag='episode_reward', value=episode_rewards[episode], step=episode)
+        tf_logger.log_scalar(tag='steps_per_episode', value=steps_per_episode, step=episode)
+
+        if solved:
+            break
