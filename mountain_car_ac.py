@@ -9,6 +9,7 @@ from keras.layers import Dense
 from keras.optimizers import Adam
 import sklearn.preprocessing
 
+tf.get_logger().setLevel(tf.logging.ERROR)
 np.random.seed(1)
 env = gym.make('MountainCarContinuous-v0')
 state_size = env.observation_space.shape[0]
@@ -16,7 +17,7 @@ action_size = env.action_space.shape[0]
 
 
 class TensorFlowLogger:
-    def __init__(self, with_baseline):
+    def __init__(self):
         self._log_dir = "logs/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         self._file_writer = tf.summary.FileWriter(self._log_dir + "/metrics")
 
@@ -29,7 +30,6 @@ class CriticNetwork:
     """
     Value Network
     """
-
     def __init__(self, learning_rate):
         self.critic = Sequential()
         self.critic.add(Dense(units=32, input_dim=state_size, activation='elu'))
@@ -47,9 +47,8 @@ class PolicyNetwork:
     which are used as the mean and standard deviation of a Gaussian (normal) distribution.
     We will choose our actions by sampling from this distribution.
     """
-
     def __init__(self, tf_session, learning_rate):
-        self.tf_session = tf_session
+        self.sess = tf_session
         self.learning_rate = learning_rate
 
         # placeholders to be fed
@@ -66,8 +65,8 @@ class PolicyNetwork:
             hidden2 = tf.layers.dense(hidden1, 32, tf.nn.elu, init_xavier)
 
             # two outputs: mu and sigma
-            mu = tf.layers.dense(hidden2, 1, init_xavier)
-            sigma = tf.layers.dense(hidden2, 1, init_xavier)
+            mu = tf.layers.dense(hidden2, 1, None, init_xavier)
+            sigma = tf.layers.dense(hidden2, 1, None, init_xavier)
             sigma = tf.nn.softplus(sigma) + 1e-5
 
             # create normal distribution and get action variable
@@ -102,7 +101,7 @@ def main():
 
         # Define hyperparameters
         max_episodes = 5000
-        max_steps = 501
+        max_steps = 999
         discount_factor = 0.99
         actor_learning_rate = 0.0004
         critic_learning_rate = 0.0004
@@ -114,6 +113,7 @@ def main():
         # actor critic
         actor = PolicyNetwork(sess, actor_learning_rate)
         critic = CriticNetwork(critic_learning_rate)()
+        sess.run(tf.global_variables_initializer())
 
         solved = False
         episode_rewards = np.zeros(max_episodes)
@@ -132,30 +132,33 @@ def main():
                 # Execute action and observe reward & next state from env
                 # next_state shape=(2,)
                 # env.step() requires input shape = (1,)
-                next_state, reward, done, _ = env.step(np.squeeze(action))
+                next_state, reward, done, _ = env.step(np.squeeze(action, axis=0))
                 episode_rewards[episode] += reward
 
                 # V_of_next_state.shape=(1,1)
                 V_of_next_state = critic.predict(state_scaler.scale(next_state))
 
                 # Set TD Target: target = r + gamma * V(next_state)
-                target = reward + discount_factor * tf.squeeze(V_of_next_state)
+                target = reward + discount_factor * np.squeeze(V_of_next_state)
 
                 # td_error = target - V(s)
                 V_of_curr_state = critic.predict(state_scaler.scale(state))
                 td_error = target - np.squeeze(V_of_curr_state)
 
                 # Update actor
-                actor.fit(sess, action=np.squeeze(action), state=state_scaler.scale(state), td_error=td_error)
+                actor.fit(action=np.squeeze(action), state=state_scaler.scale(state), td_error=td_error)
+
+                import ipdb
+                ipdb.set_trace()
 
                 # Update critic
-                critic.fit(target, V_of_curr_state, verbose=0)
+                critic.fit(np.squeeze(state_scaler.scale(state)), np.array(target, ndmin=2), verbose=0)
 
                 if done:
                     # Check if solved
                     if episode > 98:
                         average_rewards = np.mean(episode_rewards[(episode - 99):episode + 1])
-                    if average_rewards > 90:
+                    if average_rewards > 90:  # Get a reward over 90
                         print('Solved at episode: ' + str(episode))
                         print('Total Steps: ' + str(total_steps))
                         solved = True
@@ -190,7 +193,5 @@ class StateScaler:
         return scaled
 
 
-
-
-
-
+if __name__ == '__main__':
+    main()
