@@ -207,6 +207,11 @@ def main():
 
 
 if __name__ == '__main__':
+    """
+    This code will successfully solve Continuous Mountain Car if the random policy finds the top of the hill reward (+100) 
+    in the first several episodes. Otherwise, it will fall into the bad local optimum of stopping at the bottom of the hill.
+    In this case, we start training again. 
+    """
     print("========== TRAIN START ==========")
     success = main()
     while not success:
