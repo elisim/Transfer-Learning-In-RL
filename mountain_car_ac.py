@@ -197,14 +197,13 @@ def main():
                 steps_per_episode += 1
 
             total_steps += steps_per_episode
-
-            if solved:
-                break
-
             print(f"Episode: {episode}, Number of Steps : {steps_per_episode}, Cumulative reward: {episode_rewards[episode]:0.2f}")
             tf_logger.log_scalar(tag='average_100_episodes_reward', value=average_rewards, step=episode)
             tf_logger.log_scalar(tag='episode_reward', value=episode_rewards[episode], step=episode)
             tf_logger.log_scalar(tag='steps_per_episode', value=steps_per_episode, step=episode)
+
+            if solved:
+                return True
 
 
 if __name__ == '__main__':
