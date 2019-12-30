@@ -119,8 +119,9 @@ class PolicyNetwork:
 
 
 def main():
-    with tf.Session() as sess:
+    tf.reset_default_graph()
 
+    with tf.Session() as sess:
         # Define hyperparameters
         max_episodes = 5000
         max_steps = 1000
