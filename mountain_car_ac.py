@@ -15,7 +15,9 @@ env = gym.make('MountainCarContinuous-v0')
 
 retries = 0  # number of retries to run main
 date_now = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-state_size = env.observation_space.shape[0]
+real_state_size = env.observation_space.shape[0]
+real_action_size = env.action_space.shape[0]
+state_size = 6
 action_size = env.action_space.shape[0]
 
 
@@ -73,7 +75,7 @@ class PolicyNetwork:
         self.learning_rate = learning_rate
 
         # placeholders to be fed
-        self.state_placeholder = tf.placeholder(tf.float32, [None, 2])
+        self.state_placeholder = tf.placeholder(tf.float32, [None, state_size])
         self.td_error_placeholder = tf.placeholder(tf.float32)
         self.action_placeholder = tf.placeholder(tf.float32)
 
@@ -149,8 +151,13 @@ def main():
 
             # Generate an episode, out is list of episode_transitions: state, action, reward, next_state and done.
             for step in range(max_steps):
+
+                # padded_state = np.zeros([0, real_state_size])
+                # padded_state[:state.shape[0], :state.shape[1]] = state
                 # action.shape = (1,1)
-                action = actor.get_action(state_scaler.scale(state))
+                normalized_state = state_scaler.scale(state)
+                normalized_state = np.pad(normalized_state, (0, state_size - real_state_size), 'constant')
+                action = actor.get_action(normalized_state)
 
                 # Execute action and observe reward & next state from env
                 # next_state shape=(2,)
@@ -159,20 +166,22 @@ def main():
                 episode_rewards[episode] += reward
 
                 # V_of_next_state.shape=(1,1)
-                V_of_next_state = critic.predict(state_scaler.scale(next_state))
+                normalized_state_next_state = state_scaler.scale(next_state)
+                normalized_state_next_state = np.pad(normalized_state_next_state, (0, state_size - real_state_size), 'constant')
+                V_of_next_state = critic.predict(normalized_state_next_state)
 
                 # Set TD Target: target = r + gamma * V(next_state)
                 target = reward + discount_factor * np.squeeze(V_of_next_state)
 
                 # td_error = target - V(s)
-                V_of_curr_state = critic.predict(state_scaler.scale(state))
+                V_of_curr_state = critic.predict(normalized_state)
                 td_error = target - np.squeeze(V_of_curr_state)
 
                 # Update actor
-                actor.fit(action=np.squeeze(action), state=state_scaler.scale(state), td_error=td_error)
+                actor.fit(action=np.squeeze(action), state=normalized_state, td_error=td_error)
 
                 # Update critic
-                critic.fit(state_scaler.scale(state), np.array(target, ndmin=2), verbose=0)
+                critic.fit(normalized_state, np.array(target, ndmin=2), verbose=0)
 
                 if done:
                     # Check if stuck in local minima
