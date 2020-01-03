@@ -148,7 +148,8 @@ def main():
     render = False
     save_model = False
     load_model = True
-    model_file_name = 'acrobot_model'
+    load_model_file_name = 'acrobot_model'
+    save_model_file_name = 'cartpole_model'
 
     # Create Logger to log scalars
     tf_logger = TensorFlowLogger(with_baseline=run_with_baseline_flag)
@@ -160,7 +161,7 @@ def main():
     with tf.Session() as sess:
         model = ActorCritic(game_state_size, game_action_size, network_state_size, network_action_size, policy_learning_rate, critic_learning_rate, discount_factor, sess, tf_logger)
         if load_model:
-            model.load_model(model_file_name)
+            model.load_model(load_model_file_name)
         sess.run(tf.global_variables_initializer())
         solved = False
         Transition = collections.namedtuple("Transition", ["state", "action", "reward", "next_state", "done"])
@@ -221,7 +222,7 @@ def main():
                 break
 
         if save_model:
-            model.save_model(model_file_name)
+            model.save_model(save_model_file_name)
 
 
 if __name__ == '__main__':

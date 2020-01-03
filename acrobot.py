@@ -134,9 +134,11 @@ def main():
     policy_learning_rate = 0.004
     critic_learning_rate = 0.0004
     render = False
-    save_model = False
+    save_model = True
     load_model = False
-    model_file_name = 'acrobot_model'
+    load_model_file_name = 'acrobot_model'
+    save_model_file_name = 'acrobot_model'
+
 
     # Create Logger to log scalars
     tf_logger = TensorFlowLogger(with_baseline=run_with_baseline_flag)
@@ -148,7 +150,7 @@ def main():
     with tf.Session() as sess:
         model = ActorCritic(state_size, action_size, policy_learning_rate, critic_learning_rate, discount_factor, sess, tf_logger)
         if load_model:
-            model.load_model(model_file_name)
+            model.load_model(load_model_file_name)
         sess.run(tf.global_variables_initializer())
         Transition = collections.namedtuple("Transition", ["state", "action", "reward", "next_state", "done"])
         episode_rewards = np.zeros(max_episodes)
@@ -195,7 +197,7 @@ def main():
             tf_logger.log_scalar(tag='steps_per_episode', value=steps_per_episode, step=episode)
 
         if save_model:
-            model.save_model(model_file_name)
+            model.save_model(save_model_file_name)
 
 
 if __name__ == '__main__':
