@@ -67,7 +67,7 @@ class ActorCritic:
         self.saver.save(sess=self.sess, save_path=f'models/actor/{file_name}.ckpt')
 
     def load_model(self, file_name):
-        self.critic.save_weights(f'models/critic/{file_name}.h5')
+        self.critic.load_weights(f'models/critic/{file_name}.h5')
         self.saver.restore(self.sess, save_path=f'models/actor/{file_name}.ckpt')
 
 

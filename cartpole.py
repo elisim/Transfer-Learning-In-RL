@@ -72,7 +72,7 @@ class ActorCritic:
         self.saver.save(sess=self.sess, save_path=f'models/actor/{file_name}.ckpt')
 
     def load_model(self, file_name):
-        self.critic.save_weights(f'models/critic/{file_name}.h5')
+        self.critic.load_weights(f'models/critic/{file_name}.h5')
         self.saver.restore(self.sess, save_path=f'models/actor/{file_name}.ckpt')
 
 
@@ -132,8 +132,6 @@ class PolicyNetwork:
 
 def main():
     run_with_baseline_flag = "-b" in sys.argv
-    # state_size = env.observation_space.shape[0]
-    # action_size = env.action_space.n
     game_state_size = env.observation_space.shape[0]
     game_action_size = env.action_space.n
     network_state_size = 6
