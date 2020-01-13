@@ -1,14 +1,15 @@
-import keras
 import numpy as np
 import tensorflow as tf
 from keras.layers import Input, Dense, Concatenate
+from keras.losses import categorical_crossentropy
 from keras.models import Model
 from keras.optimizers import Adam
+
 from utils import StateScaler
 
 
 def actor_loss(output, target, advantage):
-    return keras.losses.categorical_crossentropy(target, output) * advantage
+    return categorical_crossentropy(target, output) * advantage
 
 
 class ActorNetworkSoftmax:

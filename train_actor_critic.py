@@ -113,7 +113,8 @@ class ActorCriticTrainer:
             results_dict['reward'].append(episode_rewards[episode])
             results_dict['average_rewards'].append(avg_rewards)
             results_dict['time'].append(round(time.time() - start_time, 2))
-            print(f'Episode {episode}, Number of Steps: {step}, Reward: {episode_rewards[episode]} Average over 100 episodes: {avg_rewards}')
+            print(
+                f'Episode {episode}, Number of Steps: {step}, Reward: {episode_rewards[episode]} Average over 100 episodes: {avg_rewards}')
 
             if solved:
                 break

@@ -31,4 +31,3 @@ elif mode == 'transfer-learning':
     model.create_progressive_network([f'models/{cart}', f'models/{acro}'], input_dict)
     model.train()
 
-pass
