@@ -1,5 +1,4 @@
 import numpy as np
-import tensorflow as tf
 from keras.layers import Input, Dense, Concatenate
 from keras.losses import categorical_crossentropy
 from keras.models import Model
@@ -40,12 +39,8 @@ class ActorNetworkSoftmax:
         advantage = Input(shape=(self.network_action_size,), name='is_weight')
 
         # a layer instance is callable on a tensor, and returns a tensor
-        output_1 = Dense(12, activation='relu',
-                         kernel_initializer=tf.contrib.layers.xavier_initializer(seed=0),
-                         bias_initializer=tf.zeros_initializer())(inputs)
-        output_2 = Dense(12, activation='relu',
-                         kernel_initializer=tf.contrib.layers.xavier_initializer(seed=0),
-                         bias_initializer=tf.zeros_initializer())(output_1)
+        output_1 = Dense(16, activation='relu')(inputs)
+        output_2 = Dense(16, activation='relu')(output_1)
         predictions = Dense(self.network_action_size, activation='softmax')(output_2)
 
         # This creates a model that includes

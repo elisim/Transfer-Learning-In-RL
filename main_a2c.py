@@ -6,7 +6,6 @@ car = 'MountainCarContinuous-v0'
 acro = 'Acrobot-v1'
 
 trained_model = cart
-
 test_game = cart
 
 mode = 'train-model'

@@ -22,7 +22,6 @@ class ActorCriticTrainer:
         else:
             self.solve_threshold = 1000
 
-        #
         self.policy = input_dict['policy']
         self.critic = input_dict['critic']
 
@@ -32,8 +31,6 @@ class ActorCriticTrainer:
 
         models_to_load = [model_to_load + "_actor.model" for model_to_load in models_list]
         self.policy.create_progressive_network(models_to_load, params)
-
-        pass
 
     def save(self, path):
         critic_path = path + "_critic.model"
@@ -64,7 +61,6 @@ class ActorCriticTrainer:
             start_time = time.time()
 
             for step in range(self.max_steps):
-
                 target = np.zeros((1, 1))
                 advantages = np.zeros((1, self.action_size))
 

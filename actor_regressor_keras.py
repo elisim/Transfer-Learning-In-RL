@@ -1,4 +1,3 @@
-import tensorflow as tf
 from keras.layers import Concatenate, Input, Dense
 from keras.losses import mean_squared_error
 from keras.models import Model
@@ -29,12 +28,8 @@ class ActorNetworkRegressor:
         advantage = Input(shape=(self.action_size,), name='is_weight')
 
         # a layer instance is callable on a tensor, and returns a tensor
-        output_1 = Dense(12, activation='relu', name="d1",
-                         kernel_initializer=tf.contrib.layers.xavier_initializer(seed=0),
-                         bias_initializer=tf.zeros_initializer())(inputs)
-        output_2 = Dense(12, activation='relu', name="d2",
-                         kernel_initializer=tf.contrib.layers.xavier_initializer(seed=0),
-                         bias_initializer=tf.zeros_initializer())(output_1)
+        output_1 = Dense(16, activation='relu', name="d1")(inputs)
+        output_2 = Dense(16, activation='relu', name="d2")(output_1)
         predictions = Dense(1, activation='linear')(output_2)
 
         # This creates a model that includes
@@ -42,7 +37,6 @@ class ActorNetworkRegressor:
         self.policy = Model(inputs=[inputs, y_true, advantage], outputs=predictions)
         self.policy.add_loss(actor_loss(y_true, predictions, advantage=advantage))
         self.policy.compile(loss=None, optimizer=Adam(lr=self.learning_rate))
-
         self.policy_pred = Model(inputs=inputs, outputs=predictions, name='test_only')
 
     def create_progressive_network(self, models_to_load, input_dict):
