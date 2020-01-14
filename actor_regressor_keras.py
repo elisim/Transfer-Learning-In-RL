@@ -1,7 +1,5 @@
-import keras
-import tensorflow as tf
-from keras.layers import Concatenate
-from keras.layers import Input, Dense
+from keras.layers import Concatenate, Input, Dense
+from keras.losses import mean_squared_error
 from keras.models import Model
 from keras.optimizers import Adam
 
@@ -10,7 +8,7 @@ from utils import StateScaler
 
 
 def actor_loss(output, target, advantage):
-    return keras.losses.mean_squared_error(target, output) * advantage
+    return mean_squared_error(target, output) * advantage
 
 
 class ActorNetworkRegressor:
@@ -20,7 +18,7 @@ class ActorNetworkRegressor:
         self.action_size = action_size
         self.game_action_size = game_action_size
         self.is_scale = is_scale
-        self.scaller = StateScaler(env)
+        self.scaler = StateScaler(env)
         self.transfer_model = None
         self.transfer_model_pred = None
 
@@ -30,12 +28,8 @@ class ActorNetworkRegressor:
         advantage = Input(shape=(self.action_size,), name='is_weight')
 
         # a layer instance is callable on a tensor, and returns a tensor
-        output_1 = Dense(12, activation='relu', name="d1",
-                         kernel_initializer=tf.contrib.layers.xavier_initializer(seed=0),
-                         bias_initializer=tf.zeros_initializer())(inputs)
-        output_2 = Dense(12, activation='relu', name="d2",
-                         kernel_initializer=tf.contrib.layers.xavier_initializer(seed=0),
-                         bias_initializer=tf.zeros_initializer())(output_1)
+        output_1 = Dense(16, activation='relu', name="d1")(inputs)
+        output_2 = Dense(16, activation='relu', name="d2")(output_1)
         predictions = Dense(1, activation='linear')(output_2)
 
         # This creates a model that includes
@@ -43,7 +37,6 @@ class ActorNetworkRegressor:
         self.policy = Model(inputs=[inputs, y_true, advantage], outputs=predictions)
         self.policy.add_loss(actor_loss(y_true, predictions, advantage=advantage))
         self.policy.compile(loss=None, optimizer=Adam(lr=self.learning_rate))
-
         self.policy_pred = Model(inputs=inputs, outputs=predictions, name='test_only')
 
     def create_progressive_network(self, models_to_load, input_dict):
@@ -83,19 +76,18 @@ class ActorNetworkRegressor:
     def __call__(self):
         return self.policy
 
-    def fitting(self, state, action, adventage):
-
+    def fitting(self, state, action, advantage):
         if self.is_scale:
-            state = self.scaller.scale(state)
+            state = self.scaler.scale(state)
 
         if self.transfer_model is not None:
-            self.transfer_model.fit([state, state, state, action, adventage], epochs=1, verbose=0)
+            self.transfer_model.fit([state, state, state, action, advantage], epochs=1, verbose=0)
         else:
-            self.policy.fit([state, action, adventage], epochs=1, verbose=0)
+            self.policy.fit([state, action, advantage], epochs=1, verbose=0)
 
     def predicting(self, state):
         if self.is_scale:
-            state = self.scaller.scale(state)
+            state = self.scaler.scale(state)
 
         if self.transfer_model is not None:
             action = self.transfer_model_pred.predict([state, state, state])

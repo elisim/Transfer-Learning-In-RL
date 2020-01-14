@@ -1,5 +1,5 @@
-from sklearn.preprocessing import StandardScaler
 import numpy as np
+from sklearn.preprocessing import StandardScaler
 
 
 class StateScaler:

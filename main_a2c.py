@@ -6,7 +6,6 @@ car = 'MountainCarContinuous-v0'
 acro = 'Acrobot-v1'
 
 trained_model = cart
-
 test_game = cart
 
 mode = 'train-model'
@@ -31,4 +30,3 @@ elif mode == 'transfer-learning':
     model.create_progressive_network([f'models/{cart}', f'models/{acro}'], input_dict)
     model.train()
 
-pass
