@@ -1,4 +1,5 @@
 import numpy as np
+import keras
 from keras.layers import Input, Dense, Concatenate
 from keras.losses import categorical_crossentropy, mean_squared_error
 from keras.models import Model
@@ -145,8 +146,12 @@ class ActorNetworkRegressor:
         advantage = Input(shape=(self.action_size,), name='is_weight')
 
         # a layer instance is callable on a tensor, and returns a tensor
-        output_1 = Dense(16, activation='relu', name="d1")(inputs)
-        output_2 = Dense(16, activation='relu', name="d2")(output_1)
+        output_1 = Dense(12, activation='relu', name="d1",
+                         kernel_initializer=keras.initializers.glorot_uniform(),
+                         bias_initializer=keras.initializers.Zeros())(inputs)
+        output_2 = Dense(12, activation='relu', name="d2",
+                         kernel_initializer=keras.initializers.glorot_uniform(),
+                         bias_initializer=keras.initializers.Zeros())(output_1)
         predictions = Dense(1, activation='linear')(output_2)
 
         # This creates a model that includes

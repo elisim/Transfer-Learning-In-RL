@@ -47,6 +47,8 @@ def get_params(game):
 
     elif game == 'MountainCarContinuous-v0':
         input_dict['solve_threshold'] = 90
+        input_dict['max_steps'] = 5000
+        input_dict['learning_rate_p'] = 0.00004
         input_dict['policy'] = ActorNetworkRegressor(input_dict['network_state_size'],
                                                      input_dict['network_action_size'],
                                                      input_dict['learning_rate_p'], input_dict['game_action_size'],
