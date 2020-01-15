@@ -1,7 +1,7 @@
 import time
 from collections import deque
 from math import floor
-
+from utils import TensorFlowLogger
 import numpy as np
 import pandas as pd
 
@@ -16,14 +16,10 @@ class ActorCriticTrainer:
         self.render = input_dict['render']
         self.discount_factor = input_dict['discount_factor']
         self.game_action_size = input_dict['game_action_size']
-
-        if 'solve_threshold' in input_dict:
-            self.solve_threshold = input_dict['solve_threshold']
-        else:
-            self.solve_threshold = 1000
-
+        self.solve_threshold = input_dict['solve_threshold']
         self.policy = input_dict['policy']
         self.critic = input_dict['critic']
+        self.tf_logger = TensorFlowLogger()
 
     def create_progressive_network(self, models_list, params):
         models_to_load = [model_to_load + "_critic.model" for model_to_load in models_list]
@@ -40,7 +36,6 @@ class ActorCriticTrainer:
         self.policy.saving(actor_path)
 
     def load(self, path, input_dict):
-
         critic_path = path + "_critic.model"
         self.critic.loading(critic_path)
 
@@ -48,11 +43,11 @@ class ActorCriticTrainer:
         self.policy.loading(actor_path, input_dict)
 
     def train(self):
-        # Start training the agent with REINFORCE algorithm
         solved = False
         episode_rewards = np.zeros(self.max_episodes)
         last_100_rewards = deque(maxlen=100)
         results_dict = {'episode': [], 'reward': [], 'average_rewards': [], 'time': []}
+        total_steps = 0
 
         for episode in range(self.max_episodes):
             state = self.env.reset()
@@ -61,6 +56,7 @@ class ActorCriticTrainer:
             start_time = time.time()
 
             for step in range(self.max_steps):
+                total_steps += 1
                 target = np.zeros((1, 1))
                 advantages = np.zeros((1, self.action_size))
 
@@ -97,22 +93,24 @@ class ActorCriticTrainer:
 
                 if done:
                     if round(np.mean(last_100_rewards), 2) > self.solve_threshold:
-                        print(' Solved at episode: ' + str(episode))
                         solved = True
                     break
 
                 state = next_state
 
-            avg_rewards = round(np.mean(last_100_rewards), 2)
             last_100_rewards.append(episode_rewards[episode])
+            avg_rewards = round(np.mean(last_100_rewards), 2)
+            self.tf_logger.log_scalar(tag='average_100_episodes_reward', value=avg_rewards, step=episode)
             results_dict['episode'].append(episode)
             results_dict['reward'].append(episode_rewards[episode])
             results_dict['average_rewards'].append(avg_rewards)
             results_dict['time'].append(round(time.time() - start_time, 2))
             print(
-                f'Episode {episode}, Number of Steps: {step}, Reward: {episode_rewards[episode]} Average over 100 episodes: {avg_rewards}')
+                f'Episode {episode}, Number of Steps: {step}, Reward: {episode_rewards[episode]:.2f} Average over 100 episodes: {avg_rewards}')
 
             if solved:
+                print('Solved at episode: ' + str(episode))
+                print('Total Steps: ' + str(total_steps))
                 break
 
-        pd.DataFrame(results_dict).to_csv('actor_critic_results2.csv')
+        # pd.DataFrame(results_dict).to_csv('actor_critic_results2.csv')

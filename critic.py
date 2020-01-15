@@ -16,7 +16,7 @@ class CriticNetwork:
         self.critic.add(Dense(units=400, input_dim=self.state_size, activation='relu'))
         self.critic.add(Dense(units=1))
         self.critic.compile(loss='mse', optimizer=Adam(lr=self.learning_rate))
-        self.scaller = StateScaler(env)
+        self.scaler = StateScaler(env)
         self.transfer_model = None
 
     def __call__(self):
@@ -25,7 +25,7 @@ class CriticNetwork:
     def fitting(self, state, target):
 
         if self.is_scale:
-            state = self.scaller.scale(state)
+            state = self.scaler.scale(state)
 
         if self.transfer_model is not None:
             self.transfer_model.fit([state, state, state], target, epochs=1, verbose=0)
@@ -35,7 +35,7 @@ class CriticNetwork:
     def predicting(self, state):
 
         if self.is_scale:
-            state = self.scaller.scale(state)
+            state = self.scaler.scale(state)
         if self.transfer_model is not None:
             res = self.transfer_model.predict([state, state, state])
         else:
@@ -59,7 +59,6 @@ class CriticNetwork:
         model = Model([self.critic.input, models[0].input, models[1].input], output_layer)
         model.compile(loss='mse', optimizer=Adam(lr=self.learning_rate))
         self.transfer_model = model
-        pass
 
     def saving(self, path):
         self.critic.save_weights(path)
