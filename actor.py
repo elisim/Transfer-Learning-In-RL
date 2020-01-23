@@ -240,11 +240,10 @@ class ActorNetworkRegressor:
             model_to_load = ActorNetworkRegressor(params['network_state_size'], params['network_action_size'],
                                                   params['learning_rate_actor'], params['game_action_size'],
                                                   params['env'], is_scale=True)
-        self.actor.load_weights(path)
+        model_to_load.actor.load_weights(path)
 
         weights_list = model_to_load.actor.get_weights()
-        for i in range(2, 4, 2):
-            self.actor.layers[i].set_weights([weights_list[i], weights_list[i + 1]])
+        self.actor.layers[2].set_weights([weights_list[2], weights_list[2 + 1]])
 
     def freeze_layers(self):
         # This freeze the all the layers except the classification layer
