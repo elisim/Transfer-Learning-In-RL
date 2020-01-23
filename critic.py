@@ -46,9 +46,9 @@ class CriticNetwork:
         models = []
 
         for model in models_to_load:
-            model_to_freeze = CriticNetwork(input_dict['network_state_size'], input_dict['learning_rate_v'],
+            model_to_freeze = CriticNetwork(input_dict['network_state_size'], input_dict['learning_rate_value'],
                                             input_dict['env'])
-            model_to_freeze.loading(model)
+            model_to_freeze.loading_weights(model)
             for layer in model_to_freeze.critic.layers:
                 layer.trainable = False
             models.append(model_to_freeze.critic)
@@ -60,8 +60,18 @@ class CriticNetwork:
         model.compile(loss='mse', optimizer=Adam(lr=self.learning_rate))
         self.transfer_model = model
 
-    def saving(self, path):
+    def saving_weights(self, path):
         self.critic.save_weights(path)
 
-    def loading(self, path):
+    def loading_weights(self, path):
         self.critic.load_weights(path)
+
+    def freeze_layers(self):
+        print('Freezing critic layers')
+        for layer in self.critic.layers:
+            layer.trainable = False
+
+    def unfreeze_layers(self):
+        print('Unfreezing critic layers')
+        for layer in self.critic.layers:
+            layer.trainable = True

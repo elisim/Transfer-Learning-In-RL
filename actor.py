@@ -5,7 +5,7 @@ from keras.losses import categorical_crossentropy, mean_squared_error
 from keras.models import Model
 from keras.optimizers import Adam
 
-from utils import StateScaler
+from utils import StateScaler, get_game_type
 
 
 def regression_loss(output, target, advantage):
@@ -29,32 +29,23 @@ class ActorNetworkSoftmax:
         self.transfer_model = None
         self.transfer_model_pred = None
 
-        # TODO: Switch to this:
-        # self.actor = keras.Sequential()
-        # self.actor.add(Dense(12, input_dim=self.network_state_size, activation='relu', kernel_initializer='he_uniform'))
-        # self.actor.add(Dense(12, activation='relu', kernel_initializer='he_uniform'))
-        # self.actor.add(Dense(self.network_action_size, activation='softmax', kernel_initializer='he_uniform'))
-        # self.actor.compile(loss='categorical_crossentropy', optimizer=Adam(lr=self.learning_rate))
-        # print("Actor model:")
-        # self.actor.summary()
-
         # This returns a tensor
         inputs = Input(shape=(self.network_state_size,))
         y_true = Input(shape=(self.network_action_size,), name='y_true')
         advantage = Input(shape=(self.network_action_size,), name='is_weight')
 
         # a layer instance is callable on a tensor, and returns a tensor
-        output_1 = Dense(16, activation='relu')(inputs)
-        output_2 = Dense(16, activation='relu')(output_1)
+        output_1 = Dense(12, activation='relu')(inputs)
+        output_2 = Dense(12, activation='relu')(output_1)
         predictions = Dense(self.network_action_size, activation='softmax')(output_2)
 
         # This creates a model that includes
         # the Input layer and three Dense layers
         self.actor = Model(inputs=[inputs, y_true, advantage], outputs=predictions)
         self.actor.add_loss(classification_loss(y_true, predictions, advantage=advantage))
-        self.actor.compile(loss=None, optimizer=Adam(lr=self.learning_rate))
+        self.actor.compile(loss=None, optimizer=Adam(lr=self.learning_rate, decay=0.0001))
 
-        self.actor_pred = Model(inputs=inputs, outputs=predictions, name='test_only')
+        self.actor_predication = Model(inputs=inputs, outputs=predictions, name='test_only')
 
     def create_progressive_network(self, models_to_load, params):
         """
@@ -64,9 +55,16 @@ class ActorNetworkSoftmax:
         models = []
 
         for model in models_to_load:
-            model_to_freeze = ActorNetworkSoftmax(params['network_state_size'], params['network_action_size'],
-                                                  params['learning_rate_p'], params['game_action_size'], params['env'])
-            model_to_freeze.loading(model)
+            model_type = get_game_type(model)
+            if model_type == 'classification':
+                model_to_freeze = ActorNetworkSoftmax(params['network_state_size'], params['network_action_size'],
+                                                      params['learning_rate_actor'], params['game_action_size'],
+                                                      params['env'])
+            else:
+                model_to_freeze = ActorNetworkRegressor(params['network_state_size'], params['network_action_size'],
+                                                        params['learning_rate_actor'], params['game_action_size'],
+                                                        params['env'], is_scale=True)
+            model_to_freeze.loading_weights(model, params)
             for layer in model_to_freeze.actor.layers:
                 layer.trainable = False
             models.append(model_to_freeze.actor)
@@ -87,11 +85,12 @@ class ActorNetworkSoftmax:
         model.add_loss(classification_loss(y_true, output_layer, advantage=advantage))
         model.compile(loss=None, optimizer=Adam(lr=self.learning_rate))
 
-        model_pred = Model(inputs=[self.actor.input[0], models[0].input[0], models[1].input[0]], outputs=output_layer,
-                           name='test_only')
+        model_predication = Model(inputs=[self.actor.input[0], models[0].input[0], models[1].input[0]],
+                                  outputs=output_layer,
+                                  name='test_only')
 
         self.transfer_model = model
-        self.transfer_model_pred = model_pred
+        self.transfer_model_pred = model_predication
 
     def __call__(self):
         return self.actor
@@ -114,7 +113,7 @@ class ActorNetworkSoftmax:
         if self.transfer_model is not None:
             actions_distribution = self.transfer_model_pred.predict([state, state, state])[0]
         else:
-            actions_distribution = self.actor_pred.predict(state)[0]
+            actions_distribution = self.actor_predication.predict(state)[0]
 
         action = np.inf
         while action > self.game_action_size - 1:
@@ -122,11 +121,23 @@ class ActorNetworkSoftmax:
 
         return action
 
-    def saving(self, path):
+    def saving_weights(self, path):
         self.actor.save_weights(path)
 
-    def loading(self, path, input_dict=None):
+    def loading_weights(self, path, input_dict=None):
         self.actor.load_weights(path)
+
+    def freeze_layers(self):
+        # This freeze the all the layers except the classification layer
+        print('Freezing actor layers')
+        for layer in self.actor.layers:
+            layer.trainable = False
+
+    def unfreeze_layers(self):
+        # This unfreeze the all the layers except the classification layer
+        print('Unfreezing actor layers')
+        for layer in self.actor.layers:
+            layer.trainable = True
 
 
 class ActorNetworkRegressor:
@@ -156,46 +167,45 @@ class ActorNetworkRegressor:
 
         # This creates a model that includes
         # the Input layer and three Dense layers
-        self.policy = Model(inputs=[inputs, y_true, advantage], outputs=predictions)
-        self.policy.add_loss(regression_loss(y_true, predictions, advantage=advantage))
-        self.policy.compile(loss=None, optimizer=Adam(lr=self.learning_rate))
-        self.policy_pred = Model(inputs=inputs, outputs=predictions, name='test_only')
+        self.actor = Model(inputs=[inputs, y_true, advantage], outputs=predictions)
+        self.actor.add_loss(regression_loss(y_true, predictions, advantage=advantage))
+        self.actor.compile(loss=None, optimizer=Adam(lr=self.learning_rate))
+        self.actor_predication = Model(inputs=inputs, outputs=predictions, name='test_only')
 
     def create_progressive_network(self, models_to_load, input_dict):
         models = []
 
         for model in models_to_load:
             model_to_freeze = ActorNetworkSoftmax(input_dict['network_state_size'], input_dict['network_action_size'],
-                                                  input_dict['learning_rate_p'], input_dict['game_action_size'],
+                                                  input_dict['learning_rate_actor'], input_dict['game_action_size'],
                                                   input_dict['env'])
-            model_to_freeze.loading(model)
+            model_to_freeze.loading_weights(model)
             for layer in model_to_freeze.actor.layers:
                 layer.trainable = False
             models.append(model_to_freeze.actor)
 
         concat_layer = Concatenate()(
-            [self.policy.layers[1].output, models[0].layers[1].output, models[1].layers[1].output])
+            [self.actor.layers[1].output, models[0].layers[1].output, models[1].layers[1].output])
         output_layer = Dense(1, activation='linear')(concat_layer)
 
-        # This creates a model that includes
-        # the Input layer and three Dense layers
         y_true = Input(shape=(1,), name='y_true')
         advantage = Input(shape=(self.action_size,), name='is_weight')
 
-        model = Model(inputs=[self.policy.input[0], models[0].input[0], models[1].input[0], y_true, advantage],
+        model = Model(inputs=[self.actor.input[0], models[0].input[0], models[1].input[0], y_true, advantage],
                       outputs=output_layer)
 
         model.add_loss(regression_loss(y_true, output_layer, advantage=advantage))
         model.compile(loss=None, optimizer=Adam(lr=self.learning_rate))
 
-        model_pred = Model(inputs=[self.policy.input[0], models[0].input[0], models[1].input[0]], outputs=output_layer,
-                           name='test_only')
+        model_predication = Model(inputs=[self.actor.input[0], models[0].input[0], models[1].input[0]],
+                                  outputs=output_layer,
+                                  name='test_only')
 
         self.transfer_model = model
-        self.transfer_model_pred = model_pred
+        self.transfer_model_pred = model_predication
 
     def __call__(self):
-        return self.policy
+        return self.actor
 
     def fitting(self, state, action, advantage):
         if self.is_scale:
@@ -204,7 +214,7 @@ class ActorNetworkRegressor:
         if self.transfer_model is not None:
             self.transfer_model.fit([state, state, state, action, advantage], epochs=1, verbose=0)
         else:
-            self.policy.fit([state, action, advantage], epochs=1, verbose=0)
+            self.actor.fit([state, action, advantage], epochs=1, verbose=0)
 
     def predicting(self, state):
         if self.is_scale:
@@ -213,19 +223,37 @@ class ActorNetworkRegressor:
         if self.transfer_model is not None:
             action = self.transfer_model_pred.predict([state, state, state])
         else:
-            action = self.policy_pred.predict(state)
+            action = self.actor_predication.predict(state)
 
         return action
 
-    def saving(self, path):
-        self.policy.save_weights(path)
+    def saving_weights(self, path):
+        self.actor.save_weights(path)
 
-    def loading(self, path, input_dict):
-        model_to_load = ActorNetworkSoftmax(input_dict['state_size'], input_dict['action_size'],
-                                            input_dict['learning_rate_p'], input_dict['game_action_size'],
-                                            input_dict['env'])
-        model_to_load.loading(path)
+    def loading_weights(self, path, params):
+        model_type = get_game_type(path)
+        if model_type == 'classification':
+            model_to_load = ActorNetworkSoftmax(params['network_state_size'], params['network_action_size'],
+                                                params['learning_rate_actor'], params['game_action_size'],
+                                                params['env'])
+        else:
+            model_to_load = ActorNetworkRegressor(params['network_state_size'], params['network_action_size'],
+                                                  params['learning_rate_actor'], params['game_action_size'],
+                                                  params['env'], is_scale=True)
+        self.actor.load_weights(path)
 
         weights_list = model_to_load.actor.get_weights()
         for i in range(2, 4, 2):
-            self.policy.layers[i].set_weights([weights_list[i], weights_list[i + 1]])
+            self.actor.layers[i].set_weights([weights_list[i], weights_list[i + 1]])
+
+    def freeze_layers(self):
+        # This freeze the all the layers except the classification layer
+        print('Freezing actor layers')
+        for layer in self.actor.layers:
+            layer.trainable = False
+
+    def unfreeze_layers(self):
+        # This unfreeze the all the layers except the classification layer
+        print('Unfreezing actor layers')
+        for layer in self.actor.layers:
+            layer.trainable = True
